@@ -2,15 +2,15 @@
 
 <div align="center">
 
-[![npm version](https://img.shields.io/npm/v/@intent-mcp/kit.svg?style=flat)](https://www.npmjs.com/package/@intent-mcp/kit)
+[![npm version](https://img.shields.io/npm/v/@aintent/mcp-kit.svg?style=flat)](https://www.npmjs.com/package/@aintent/mcp-kit)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/openpandacodes/intent-mcp-kit/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/aintent/mcp-kit/pulls)
 
 </div>
 
 <p align="center">
-  <strong>A powerful SDK for Machine Comprehension and Processing (MCP) with seamless UI integration.</strong>
+  <strong>A powerful SDK for Machine Comprehension and Processing (MCP) by Aintent.ai, an Axes Labs company.</strong>
 </p>
 
 <p align="center">
@@ -38,7 +38,7 @@
 ## Quick Start 🚀
 
 ```typescript
-import { MCPClient, ChatWidget } from '@intent-mcp/kit';
+import { MCPClient, ChatWidget } from '@aintent/mcp-kit';
 
 // Initialize the client
 const client = new MCPClient({
@@ -63,13 +63,13 @@ chat.on('message', async (message) => {
 
 ```bash
 # Using npm
-npm install @intent-mcp/kit
+npm install @aintent/mcp-kit
 
 # Using yarn
-yarn add @intent-mcp/kit
+yarn add @aintent/mcp-kit
 
 # Using pnpm
-pnpm add @intent-mcp/kit
+pnpm add @aintent/mcp-kit
 ```
 
 ## Usage 💡
@@ -77,7 +77,7 @@ pnpm add @intent-mcp/kit
 ### Core Client
 
 ```typescript
-import { MCPClient } from '@intent-mcp/kit';
+import { MCPClient } from '@aintent/mcp-kit';
 
 const client = new MCPClient({
   apiKey: 'your-api-key',
@@ -100,7 +100,7 @@ const result = await client.executeWorkflow(flow);
 ### Interactive Chat
 
 ```typescript
-import { ChatWidget } from '@intent-mcp/kit';
+import { ChatWidget } from '@aintent/mcp-kit';
 
 const chat = new ChatWidget('#chat', client, {
   theme: 'dark',
@@ -119,7 +119,7 @@ chat.on('message', (message) => {
 ### Flow Visualization
 
 ```typescript
-import { FlowViewerWidget } from '@intent-mcp/kit';
+import { FlowViewerWidget } from '@aintent/mcp-kit';
 
 const viewer = new FlowViewerWidget('#viewer', flow, {
   height: '800px',
@@ -211,17 +211,17 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 ## Support 💬
 
-- 📧 Email: support@intent-mcp.com
-- 💬 Discord: [Join our community](https://discord.gg/intent-mcp)
-- 🐦 Twitter: [@IntentMCP](https://twitter.com/IntentMCP)
-- 📝 Blog: [Intent MCP Blog](https://blog.intent-mcp.com)
+- 📧 Email: aby@helloaxes.com
+- 🐦 Twitter: [@aintent_](https://x.com/aintent_)
+- 👨‍💻 Founder: [@magicofanon](https://x.com/magicofanon)
+- 📝 Blog: [Aintent Blog](https://blog.aintent.ai)
 
 ---
 
-<p align="center">Made with ❤️ by the Intent MCP Team</p>
+<p align="center">Made with ❤️ by Aintent.ai, an Axes Labs company</p>
 
 <p align="center">
-  <a href="https://intent-mcp.com">Website</a> •
-  <a href="https://docs.intent-mcp.com">Documentation</a> •
+  <a href="https://aintent.ai">Website</a> •
+  <a href="https://docs.aintent.ai">Documentation</a> •
   <a href="https://github.com/openpandacodes/intent-mcp-kit">GitHub</a>
 </p>
