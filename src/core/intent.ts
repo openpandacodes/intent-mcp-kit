@@ -1,4 +1,4 @@
-import { Intent, MCPResponse } from './types';
+import { Intent, MCPResponse, Goal } from './types';
 import { MCPClient } from './client';
 
 export class IntentProcessor {
@@ -70,5 +70,65 @@ export class IntentProcessor {
       data: null,
       error: `Failed after ${maxRetries} attempts: ${lastError}`
     };
+  }
+}
+
+export class DeepIntent {
+  private intentId: string;
+  private rawIntent: string;
+  private mainGoal: Goal;
+  private subGoals: Goal[];
+
+  constructor(intentId: string, rawIntent: string, mainGoal: Goal, subGoals: Goal[] = []) {
+    this.intentId = intentId;
+    this.rawIntent = rawIntent;
+    this.mainGoal = mainGoal;
+    this.subGoals = subGoals;
+  }
+
+  public getIntentId(): string {
+    return this.intentId;
+  }
+
+  public getRawIntent(): string {
+    return this.rawIntent;
+  }
+
+  public getMainGoal(): Goal {
+    return { ...this.mainGoal };
+  }
+
+  public getSubGoals(): Goal[] {
+    return [...this.subGoals];
+  }
+
+  public addSubGoal(goal: Goal): void {
+    this.subGoals.push(goal);
+  }
+
+  public removeSubGoal(goalId: string): void {
+    this.subGoals = this.subGoals.filter(goal => goal.id !== goalId);
+  }
+
+  public toJSON(): object {
+    return {
+      intentId: this.intentId,
+      rawIntent: this.rawIntent,
+      mainGoal: this.mainGoal,
+      subGoals: this.subGoals
+    };
+  }
+
+  public static fromJSON(data: any): DeepIntent {
+    if (!data.intentId || !data.rawIntent || !data.mainGoal) {
+      throw new Error('Invalid DeepIntent data');
+    }
+
+    return new DeepIntent(
+      data.intentId,
+      data.rawIntent,
+      data.mainGoal,
+      data.subGoals || []
+    );
   }
 }

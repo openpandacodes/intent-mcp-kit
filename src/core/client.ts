@@ -1,146 +1,127 @@
-import { MCPConfig, MCPResponse, IntentExecutionOptions } from './types';
+import { MCPConfig, ExecutionResult, DeepIntent, DeepFlow } from './types';
 
 export class MCPClient {
-  private baseUrl: string;
   private apiKey: string;
+  private baseUrl: string;
   private timeout: number;
 
   constructor(config: MCPConfig) {
-    this.validateConfig(config);
-    this.baseUrl = config.baseUrl;
     this.apiKey = config.apiKey;
-    this.timeout = config.timeout || 30000;
+    this.baseUrl = config.baseUrl;
+    this.timeout = config.timeout || 30000; // Default 30s timeout
   }
 
-  private validateConfig(config: MCPConfig): void {
-    if (!config.baseUrl.startsWith('http')) {
-      throw new Error('baseUrl must be a valid URL');
-    }
-    if (!config.apiKey) {
-      throw new Error('apiKey is required');
-    }
-    if (config.timeout && (config.timeout < 1000 || config.timeout > 60000)) {
-      throw new Error('timeout must be between 1000ms and 60000ms');
-    }
-  }
-
-  private async makeRequest<T>(endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: any): Promise<MCPResponse> {
-    if (!endpoint.startsWith('/')) {
-      throw new Error('Endpoint must start with /');
-    }
-
-    if ((method === 'POST' || method === 'PUT') && !body) {
-      throw new Error('Body is required for POST/PUT requests');
-    }
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`
-    };
-
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), this.timeout);
-
+  async connect(): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal
+      const response = await fetch(`${this.baseUrl}/health`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Failed to connect to MCP server');
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new Error(`Connection failed: ${errorMessage}`);
+    }
+  }
+
+  async processIntent(intent: string): Promise<DeepIntent> {
+    try {
+      const response = await fetch(`${this.baseUrl}/intent/process`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ intent })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process intent');
       }
 
-      const data = await response.json();
-      return {
-        success: true,
-        data,
-        error: undefined
-      };
-    } catch (error) {
-      clearTimeout(id);
+      return await response.json();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new Error(`Intent processing failed: ${errorMessage}`);
+    }
+  }
+
+  async generateWorkflows(intent: DeepIntent): Promise<DeepFlow[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/workflows/generate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ intent })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate workflows');
+      }
+
+      return await response.json();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new Error(`Workflow generation failed: ${errorMessage}`);
+    }
+  }
+
+  async executeWorkflow(flow: DeepFlow): Promise<ExecutionResult> {
+    try {
+      const response = await fetch(`${this.baseUrl}/workflows/execute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ flow })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to execute workflow');
+      }
+
+      return await response.json();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new Error(`Workflow execution failed: ${errorMessage}`);
+    }
+  }
+
+  private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: AbortSignal.timeout(this.timeout)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error: unknown) {
       if (error instanceof Error) {
-        return {
-          success: false,
-          data: null,
-          error: error.message
-        };
+        if (error.name === 'AbortError') {
+          throw new Error(`Request timeout after ${this.timeout}ms`);
+        }
+        throw error;
       }
-      return {
-        success: false,
-        data: null,
-        error: 'Unknown error occurred'
-      };
-    } finally {
-      clearTimeout(id);
+      throw new Error('Unknown error occurred');
     }
-  }
-
-  public async getIntent(id: string): Promise<MCPResponse> {
-    if (!id || typeof id !== 'string') {
-      return {
-        success: false,
-        data: null,
-        error: 'Invalid intent ID'
-      };
-    }
-    return this.makeRequest(`/intents/${id}`, 'GET');
-  }
-
-  public async executeIntent(id: string, options: IntentExecutionOptions = {}): Promise<MCPResponse> {
-    if (!id || typeof id !== 'string') {
-      return {
-        success: false,
-        data: null,
-        error: 'Invalid intent ID'
-      };
-    }
-    return this.makeRequest(`/intents/${id}/execute`, 'POST', options);
-  }
-
-  public async listIntents(): Promise<MCPResponse> {
-    return this.makeRequest('/intents', 'GET');
-  }
-
-  public async createIntent(intent: Record<string, any>): Promise<MCPResponse> {
-    if (!intent || typeof intent !== 'object') {
-      return {
-        success: false,
-        data: null,
-        error: 'Invalid intent data'
-      };
-    }
-    return this.makeRequest('/intents', 'POST', intent);
-  }
-
-  public async updateIntent(id: string, intent: Record<string, any>): Promise<MCPResponse> {
-    if (!id || typeof id !== 'string') {
-      return {
-        success: false,
-        data: null,
-        error: 'Invalid intent ID'
-      };
-    }
-    if (!intent || typeof intent !== 'object') {
-      return {
-        success: false,
-        data: null,
-        error: 'Invalid intent data'
-      };
-    }
-    return this.makeRequest(`/intents/${id}`, 'PUT', intent);
-  }
-
-  public async deleteIntent(id: string): Promise<MCPResponse> {
-    if (!id || typeof id !== 'string') {
-      return {
-        success: false,
-        data: null,
-        error: 'Invalid intent ID'
-      };
-    }
-    return this.makeRequest(`/intents/${id}`, 'DELETE');
   }
 }
