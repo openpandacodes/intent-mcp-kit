@@ -1,24 +1,65 @@
-# Intent MCP Kit
+# Intent MCP Kit 🚀
+
+<div align="center">
 
 [![npm version](https://img.shields.io/npm/v/@aintent/mcp-kit.svg?style=flat)](https://www.npmjs.com/package/@aintent/mcp-kit)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/aintent/mcp-kit/blob/main/docs/CONTRIBUTING.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/aintent/mcp-kit/pulls)
 
-Machine Comprehension and Processing (MCP) SDK by Aintent.ai, an Axes Labs company. Build intelligent applications with natural language understanding and automated workflow generation.
+</div>
 
-## 📚 Documentation
+<p align="center">
+  <strong>A powerful SDK for Model Context Protocol (MCP) by Aintent.ai, an Axes Labs company.</strong>
+</p>
 
-- [Getting Started Guide](docs/getting-started.md) - Quick start guide and basic usage
-- [Core Concepts](docs/concepts.md) - Understanding MCP architecture and concepts
-- [API Reference](docs/api/README.md) - Detailed API documentation
-- [Widget Documentation](docs/widgets/README.md) - UI components and customization
-- [Examples](docs/examples/README.md) - Code examples and use cases
-- [Contributing Guide](docs/CONTRIBUTING.md) - Guidelines for contributors
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#widgets">Widgets</a> •
+  <a href="#api">API</a> •
+  <a href="#examples">Examples</a> •
+  <a href="#documentation">Documentation</a>
+</p>
 
-## 🚀 Quick Start
+## Features ✨
 
-### Installation
+- 🎯 **Intent Processing**: Advanced natural language understanding and intent classification
+- 🔄 **Workflow Generation**: Automated workflow creation from natural language inputs
+- 🎨 **Interactive Widgets**: Ready-to-use UI components for chat and flow visualization
+- 🛠️ **Extensible Architecture**: Easy to customize and extend with your own components
+- 📦 **TypeScript Ready**: Full TypeScript support with comprehensive type definitions
+- 🔌 **Plugin System**: Extensible plugin architecture for custom integrations
+- 🎭 **Theme Support**: Light and dark themes out of the box
+- 📱 **Responsive Design**: Works seamlessly on desktop and mobile
+
+## Quick Start 🚀
+
+```typescript
+import { MCPClient, ChatWidget } from '@aintent/mcp-kit';
+
+// Initialize the client
+const client = new MCPClient({
+  apiKey: 'your-api-key'
+});
+
+// Create a chat widget
+const chat = new ChatWidget('#chat-container', client, {
+  theme: 'light',
+  height: '500px'
+});
+
+// Process intents and generate workflows
+chat.on('message', async (message) => {
+  const intent = await client.processIntent(message);
+  const flow = await client.generateWorkflow(intent);
+  await client.executeWorkflow(flow);
+});
+```
+
+## Installation 📦
 
 ```bash
 # Using npm
@@ -31,107 +72,156 @@ yarn add @aintent/mcp-kit
 pnpm add @aintent/mcp-kit
 ```
 
-### Basic Usage
+## Usage 💡
+
+### Core Client
 
 ```typescript
 import { MCPClient } from '@aintent/mcp-kit';
 
-// Initialize client
 const client = new MCPClient({
-  apiKey: 'your-api-key'
+  apiKey: 'your-api-key',
+  options: {
+    timeout: 5000,
+    retries: 3
+  }
 });
 
-// Process intent
-const intent = await client.processIntent(
-  'Deploy the application to production'
-);
+// Process an intent
+const intent = await client.processIntent('Deploy the application to production');
 
-// Generate workflow
+// Generate a workflow
 const flow = await client.generateWorkflow(intent);
 
-// Execute workflow
+// Execute the workflow
 const result = await client.executeWorkflow(flow);
 ```
 
-### Adding UI Components
+### Interactive Chat
 
 ```typescript
-import { ChatWidget, FlowViewerWidget } from '@aintent/mcp-kit';
+import { ChatWidget } from '@aintent/mcp-kit';
 
-// Create chat widget
-const chat = new ChatWidget('#chat-container', client, {
-  theme: 'light',
-  height: '500px'
+const chat = new ChatWidget('#chat', client, {
+  theme: 'dark',
+  height: '600px',
+  placeholder: 'What would you like to do?',
+  maxMessages: 100,
+  autoScroll: true
 });
 
-// Create flow viewer
-const viewer = new FlowViewerWidget('#flow-container', null, {
-  theme: 'light',
-  height: '600px'
-});
-
-// Link widgets
-chat.on('message', async (message) => {
-  const intent = await client.processIntent(message.content);
-  const flow = await client.generateWorkflow(intent);
-  viewer.updateFlow(flow);
+// Listen for events
+chat.on('message', (message) => {
+  console.log('New message:', message);
 });
 ```
 
-## 🔑 Key Features
+### Flow Visualization
 
-- Natural Language Understanding
-- Automated Workflow Generation
-- Workflow Visualization
-- Interactive Chat Interface
-- TypeScript Support
-- Customizable UI Components
-- Event-Driven Architecture
-- Error Handling
-- Theming Support
+```typescript
+import { FlowViewerWidget } from '@aintent/mcp-kit';
 
-## 🛠️ Development
+const viewer = new FlowViewerWidget('#viewer', flow, {
+  height: '800px',
+  theme: 'light',
+  zoom: {
+    min: 0.5,
+    max: 3,
+    step: 0.1
+  }
+});
 
-```bash
-# Clone repository
-git clone https://github.com/aintent/mcp-kit.git
-cd mcp-kit
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Run tests
-npm test
-
-# Build for production
-npm run build
+// Update flow data
+viewer.updateFlow(newFlow);
 ```
 
-## 🤝 Contributing
+## Widgets 🎨
 
-We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details.
+The SDK includes ready-to-use UI components:
 
-## 📝 License
+- **ChatWidget**: Interactive chat interface for natural language interactions
+- **FlowViewerWidget**: Visual workflow representation with zoom and pan capabilities
+- **Custom Widgets**: Extend `MCPWidget` to create your own components
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+[Learn more about widgets →](./docs/widgets/README.md)
 
-## 🌐 Links
+## API Reference 📚
 
-- [Website](https://aintent.ai)
-- [Documentation](https://aintent.ai/docs)
-- [Blog](https://aintent.ai/blog)
-- [Twitter](https://twitter.com/aintent_)
-- [Founder](https://twitter.com/magicofanon)
+### MCPClient
 
-## 💬 Support
+- `processIntent(input: string): Promise<DeepIntent>`
+- `generateWorkflow(intent: DeepIntent): Promise<DeepFlow>`
+- `executeWorkflow(flow: DeepFlow): Promise<WorkflowResult>`
 
-- Email: [aby@helloaxes.com](mailto:aby@helloaxes.com)
-- GitHub Issues: [Report a bug](https://github.com/aintent/mcp-kit/issues)
-- Discord: [Join our community](https://discord.gg/aintent)
+### Widgets
+
+- `ChatWidget`: [Documentation](./docs/widgets/chat-widget.md)
+- `FlowViewerWidget`: [Documentation](./docs/widgets/flow-viewer-widget.md)
+- `MCPWidget`: [Base Class Documentation](./docs/widgets/base-widget.md)
+
+[Full API Documentation →](./docs/api/README.md)
+
+## Examples 🎮
+
+### Basic Intent Processing
+
+```typescript
+const result = await client.processIntent('Scale the web service to 5 replicas');
+console.log(result.confidence); // 0.95
+console.log(result.action); // { type: 'scale', target: 'web-service', replicas: 5 }
+```
+
+### Workflow Generation
+
+```typescript
+const workflow = await client.generateWorkflow({
+  action: 'deploy',
+  target: 'web-app',
+  environment: 'production'
+});
+
+console.log(workflow.steps); // Array of workflow steps
+console.log(workflow.resources); // Required resources
+```
+
+[More Examples →](./examples/README.md)
+
+## Documentation 📖
+
+- [Getting Started Guide](./docs/getting-started.md)
+- [Core Concepts](./docs/concepts.md)
+- [Widget Documentation](./docs/widgets/README.md)
+- [API Reference](./docs/api/README.md)
+- [Examples](./examples/README.md)
+- [Contributing Guide](./CONTRIBUTING.md)
+
+## Contributing 🤝
+
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License 📄
+
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+
+## Support 💬
+
+- 📧 Email: aby@helloaxes.com
+- 🐦 Twitter: [@aintent_](https://x.com/aintent_)
+- 👨‍💻 Founder: [@magicofanon](https://x.com/magicofanon)
+- 📝 Blog: [Aintent Blog](https://blog.aintent.ai)
 
 ---
 
-Made with ❤️ by [Aintent.ai](https://aintent.ai), an Axes Labs company
+<p align="center">Made with ❤️ by Aintent.ai, an Axes Labs company</p>
+
+<p align="center">
+  <a href="https://aintent.ai">Website</a> •
+  <a href="https://docs.aintent.ai">Documentation</a> •
+  <a href="https://github.com/openpandacodes/intent-mcp-kit">GitHub</a>
+</p>
