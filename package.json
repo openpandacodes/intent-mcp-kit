@@ -1,7 +1,7 @@
 {
-  "name": "intent-mcp-kit",
-  "version": "0.1.0",
-  "description": "SDK for integrating with MCP Servers and their AI capabilities",
+  "name": "@aintent/mcp-kit",
+  "version": "1.0.0",
+  "description": "Model Context Protocol (MCP) SDK by Aintent.ai, an Axes Labs company",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -27,16 +27,21 @@
     "flow-viewer",
     "typescript"
   ],
-  "author": "Abhimanyu Kashyap",
+  "author": {
+    "name": "Aintent.ai",
+    "email": "aby@helloaxes.com",
+    "url": "https://aintent.ai"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openpandacodes/intent-mcp-kit.git"
+    "url": "git+https://github.com/aintent/mcp-kit.git"
   },
   "bugs": {
-    "url": "https://github.com/openpandacodes/intent-mcp-kit/issues"
+    "url": "https://github.com/aintent/mcp-kit/issues",
+    "email": "aby@helloaxes.com"
   },
-  "homepage": "https://github.com/openpandacodes/intent-mcp-kit#readme",
+  "homepage": "https://aintent.ai",
   "dependencies": {
     "tslib": "^2.5.0"
   },
