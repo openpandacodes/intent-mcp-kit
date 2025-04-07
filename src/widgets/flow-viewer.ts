@@ -1,407 +1,417 @@
 // src/widgets/flow-viewer.ts
-import { DeepFlow, Resource, Step, WidgetOptions } from '../core/types';
+import { MCPWidget } from './base';
+import { MCPClient, DeepFlow, WidgetOptions } from '../core';
 
-export class FlowViewerWidget {
-  private element: HTMLElement;
+/**
+ * Configuration options for the FlowViewerWidget.
+ * Extends the base WidgetOptions with zoom and pan controls.
+ */
+interface FlowViewerOptions extends WidgetOptions {
+  /** Zoom control configuration */
+  zoom?: {
+    /** Minimum zoom level */
+    min: number;
+    /** Maximum zoom level */
+    max: number;
+    /** Zoom step size */
+    step: number;
+  };
+  /** Pan control configuration */
+  pan?: {
+    /** Whether panning is enabled */
+    enabled: boolean;
+    /** Panning speed multiplier */
+    speed: number;
+  };
+}
+
+/**
+ * Interactive flow visualization widget for MCP.
+ * Displays resources and steps in a flow as an interactive SVG diagram.
+ * Supports zooming, panning, and interactive elements.
+ */
+export class FlowViewerWidget extends MCPWidget {
+  /** The flow being visualized */
   private flow: DeepFlow;
-  private options: WidgetOptions;
-  private svgElement: SVGElement;
-  private tooltipElement: HTMLElement;
-  private container: HTMLElement;
+  /** SVG container for the flow diagram */
+  private svgContainer: SVGElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  /** Tooltip element for displaying additional information */
+  private tooltipElement: HTMLElement = document.createElement('div');
+  /** Current zoom level */
   private zoomLevel: number = 1;
+  /** Current horizontal pan position */
   private panX: number = 0;
+  /** Current vertical pan position */
   private panY: number = 0;
+  /** Whether the user is currently dragging the view */
   private isDragging: boolean = false;
-  private dragStartX: number = 0;
-  private dragStartY: number = 0;
+  /** Last recorded mouse X position during drag */
   private lastMouseX: number = 0;
+  /** Last recorded mouse Y position during drag */
   private lastMouseY: number = 0;
 
-  constructor(element: HTMLElement | string, flow: DeepFlow, options: WidgetOptions = {}) {
-    // Get or create container element
-    this.element = typeof element === 'string' 
-      ? document.getElementById(element) || document.createElement('div') 
-      : element;
-    
-    this.flow = flow;
-    this.options = {
-      height: '500px',
-      width: '100%',
-      theme: 'light',
+  /**
+   * Creates a new FlowViewerWidget instance.
+   * @param element - The target DOM element or its ID where the widget will be mounted
+   * @param flow - The flow to visualize
+   * @param options - Flow viewer configuration options
+   */
+  constructor(element: HTMLElement | string, flow: DeepFlow, options: FlowViewerOptions = {}) {
+    super(element, null as any, {
+      ...options,
       zoom: {
         min: 0.1,
         max: 2,
-        step: 0.1
+        step: 0.1,
+        ...options.zoom
       },
       pan: {
         enabled: true,
-        speed: 1
-      },
-      ...options
-    };
-    
-    // Create container
-    this.container = document.createElement('div');
-    this.container.style.position = 'relative';
-    this.container.style.overflow = 'hidden';
-    this.container.style.width = '100%';
-    this.container.style.height = '100%';
-    
-    // Create SVG element for visualization
-    this.svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    this.svgElement.style.width = '100%';
-    this.svgElement.style.height = '100%';
-    this.svgElement.style.overflow = 'visible';
-    
-    // Create tooltip element
-    this.tooltipElement = document.createElement('div');
-    this.tooltipElement.className = 'mcp-flow-tooltip';
-    this.tooltipElement.style.position = 'absolute';
-    this.tooltipElement.style.display = 'none';
-    this.tooltipElement.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-    this.tooltipElement.style.color = 'white';
-    this.tooltipElement.style.padding = '8px 12px';
-    this.tooltipElement.style.borderRadius = '4px';
-    this.tooltipElement.style.fontSize = '14px';
-    this.tooltipElement.style.zIndex = '1000';
-    this.tooltipElement.style.pointerEvents = 'none';
-    
-    // Set up the widget UI
-    this.setupUI();
-    
-    // Add event listeners
+        speed: 1,
+        ...options.pan
+      }
+    });
+
+    this.flow = flow;
+    this.setupViewer();
+  }
+
+  /**
+   * Sets up the flow viewer interface with SVG container, tooltip, and toolbar.
+   * @private
+   */
+  private setupViewer(): void {
+    // Create SVG container
+    this.svgContainer.style.width = '100%';
+    this.svgContainer.style.height = '100%';
+    this.svgContainer.style.overflow = 'visible';
+
+    // Create tooltip
+    this.tooltipElement.className = 'flow-tooltip';
+    this.tooltipElement.style.cssText = `
+      position: absolute;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+      pointer-events: none;
+      z-index: 1000;
+    `;
+
+    // Create toolbar
+    const toolbar = this.createToolbar();
+
+    // Add elements to container
+    this.element.appendChild(toolbar);
+    this.element.appendChild(this.svgContainer);
+    this.element.appendChild(this.tooltipElement);
+
+    // Setup event listeners
     this.setupEventListeners();
   }
 
-  private setupUI(): void {
-    // Apply styles to container
-    this.element.className = 'mcp-flow-viewer';
-    this.element.style.position = 'relative';
-    this.element.style.height = this.options.height || '500px';
-    this.element.style.width = this.options.width || '100%';
-    this.element.style.overflow = 'hidden';
-    this.element.style.border = '1px solid #e0e0e0';
-    this.element.style.borderRadius = '8px';
-    this.element.style.backgroundColor = this.options.theme === 'dark' ? '#1e1e1e' : '#ffffff';
-    
-    // Append elements to container
-    this.container.appendChild(this.svgElement);
-    this.element.appendChild(this.container);
-    this.element.appendChild(this.tooltipElement);
-    
-    // Add toolbar
-    this.setupToolbar();
-  }
-
-  private setupToolbar(): void {
+  /**
+   * Creates the toolbar with zoom and reset controls.
+   * @returns The created toolbar element
+   * @private
+   */
+  private createToolbar(): HTMLElement {
     const toolbar = document.createElement('div');
-    toolbar.className = 'mcp-flow-toolbar';
-    toolbar.style.position = 'absolute';
-    toolbar.style.top = '10px';
-    toolbar.style.right = '10px';
-    toolbar.style.display = 'flex';
-    toolbar.style.gap = '8px';
-    toolbar.style.zIndex = '1001';
-    
-    // Zoom controls
-    const zoomInButton = this.createToolbarButton('+', 'Zoom In');
-    const zoomOutButton = this.createToolbarButton('-', 'Zoom Out');
-    const resetButton = this.createToolbarButton('Reset', 'Reset View');
-    
-    zoomInButton.addEventListener('click', () => this.zoomIn());
-    zoomOutButton.addEventListener('click', () => this.zoomOut());
-    resetButton.addEventListener('click', () => this.resetView());
-    
-    toolbar.appendChild(zoomInButton);
-    toolbar.appendChild(zoomOutButton);
-    toolbar.appendChild(resetButton);
-    
-    this.element.appendChild(toolbar);
+    toolbar.className = 'flow-toolbar';
+    toolbar.style.cssText = `
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 8px;
+      z-index: 1;
+    `;
+
+    const zoomIn = this.createToolbarButton('+', 'Zoom In');
+    const zoomOut = this.createToolbarButton('-', 'Zoom Out');
+    const reset = this.createToolbarButton('Reset', 'Reset View');
+
+    zoomIn.addEventListener('click', () => this.zoom(1));
+    zoomOut.addEventListener('click', () => this.zoom(-1));
+    reset.addEventListener('click', () => this.resetView());
+
+    toolbar.appendChild(zoomIn);
+    toolbar.appendChild(zoomOut);
+    toolbar.appendChild(reset);
+
+    return toolbar;
   }
 
+  /**
+   * Creates a styled button for the toolbar.
+   * @param text - Button text
+   * @param title - Button tooltip text
+   * @returns The created button element
+   * @private
+   */
   private createToolbarButton(text: string, title: string): HTMLButtonElement {
     const button = document.createElement('button');
     button.textContent = text;
     button.title = title;
-    button.style.padding = '4px 8px';
-    button.style.background = this.options.theme === 'dark' ? '#333' : '#f5f5f5';
-    button.style.color = this.options.theme === 'dark' ? '#fff' : '#333';
-    button.style.border = '1px solid ' + (this.options.theme === 'dark' ? '#555' : '#ddd');
-    button.style.borderRadius = '4px';
-    button.style.cursor = 'pointer';
-    button.style.fontSize = '14px';
-    button.style.fontFamily = 'Arial, sans-serif';
+    button.style.cssText = `
+      padding: 4px 8px;
+      background: ${this.options.theme === 'dark' ? '#333' : '#f5f5f5'};
+      color: ${this.options.theme === 'dark' ? '#fff' : '#333'};
+      border: 1px solid ${this.options.theme === 'dark' ? '#555' : '#ddd'};
+      border-radius: 4px;
+      cursor: pointer;
+    `;
     return button;
   }
 
+  /**
+   * Sets up event listeners for pan and zoom interactions.
+   * @private
+   */
   private setupEventListeners(): void {
-    // Mouse events for panning
-    if (this.options.pan.enabled) {
-      this.container.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-      this.container.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-      this.container.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-      this.container.addEventListener('mouseleave', (e) => this.handleMouseLeave(e));
+    if ((this.options as FlowViewerOptions).pan?.enabled) {
+      this.element.addEventListener('mousedown', this.handleMouseDown.bind(this));
+      this.element.addEventListener('mousemove', this.handleMouseMove.bind(this));
+      this.element.addEventListener('mouseup', this.handleMouseUp.bind(this));
+      this.element.addEventListener('mouseleave', this.handleMouseUp.bind(this));
     }
 
-    // Wheel event for zooming
-    this.container.addEventListener('wheel', (e) => this.handleWheel(e));
+    this.element.addEventListener('wheel', this.handleWheel.bind(this));
   }
 
+  /**
+   * Handles mouse down events for panning.
+   * @param e - Mouse event
+   * @private
+   */
   private handleMouseDown(e: MouseEvent): void {
     if (e.button === 0) { // Left mouse button
       this.isDragging = true;
-      this.dragStartX = e.clientX;
-      this.dragStartY = e.clientY;
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
-      e.preventDefault();
     }
   }
 
+  /**
+   * Handles mouse move events for panning.
+   * @param e - Mouse event
+   * @private
+   */
   private handleMouseMove(e: MouseEvent): void {
-    if (this.isDragging) {
-      const deltaX = e.clientX - this.lastMouseX;
-      const deltaY = e.clientY - this.lastMouseY;
-      
-      this.panX += deltaX * this.zoomLevel;
-      this.panY += deltaY * this.zoomLevel;
-      
-      this.updateTransform();
-      this.lastMouseX = e.clientX;
-      this.lastMouseY = e.clientY;
-    }
+    if (!this.isDragging) return;
+
+    const dx = e.clientX - this.lastMouseX;
+    const dy = e.clientY - this.lastMouseY;
+    const speed = (this.options as FlowViewerOptions).pan?.speed || 1;
+
+    this.panX += dx * speed;
+    this.panY += dy * speed;
+
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+
+    this.updateTransform();
   }
 
-  private handleMouseUp(e: MouseEvent): void {
-    if (e.button === 0) {
-      this.isDragging = false;
-    }
-  }
-
-  private handleMouseLeave(e: MouseEvent): void {
+  /**
+   * Handles mouse up events to stop panning.
+   * @private
+   */
+  private handleMouseUp(): void {
     this.isDragging = false;
   }
 
+  /**
+   * Handles mouse wheel events for zooming.
+   * @param e - Wheel event
+   * @private
+   */
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -1 : 1;
     this.zoom(delta);
   }
 
+  /**
+   * Adjusts the zoom level.
+   * @param delta - Zoom delta (-1 for zoom out, 1 for zoom in)
+   * @private
+   */
   private zoom(delta: number): void {
-    const currentZoom = parseFloat(this.svgElement.style.transform.split('scale(')[1]?.split(')')[0] || '1');
-    const newZoom = currentZoom + (delta * this.options.zoom.step);
-    
-    if (newZoom >= this.options.zoom.min && newZoom <= this.options.zoom.max) {
+    const options = this.options as FlowViewerOptions;
+    const step = options.zoom?.step || 0.1;
+    const min = options.zoom?.min || 0.1;
+    const max = options.zoom?.max || 2;
+
+    const newZoom = this.zoomLevel + (delta * step);
+    if (newZoom >= min && newZoom <= max) {
       this.zoomLevel = newZoom;
       this.updateTransform();
     }
   }
 
-  private zoomIn(): void {
-    this.zoom(1);
-  }
-
-  private zoomOut(): void {
-    this.zoom(-1);
-  }
-
+  /**
+   * Resets the view to default zoom and pan position.
+   * @private
+   */
   private resetView(): void {
     this.zoomLevel = 1;
     this.panX = 0;
     this.panY = 0;
     this.updateTransform();
-    this.render
   }
 
+  /**
+   * Updates the SVG container transform based on current zoom and pan.
+   * @private
+   */
   private updateTransform(): void {
-    this.container.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+    this.svgContainer.style.transform = 
+      `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
   }
 
-  private render(): void {
-    // Clear existing visualization
-    while (this.svgElement.firstChild) {
-      this.svgElement.removeChild(this.svgElement.firstChild);
+  /**
+   * Renders the flow viewer.
+   * Implements the abstract render method from MCPWidget.
+   */
+  public render(): void {
+    // Clear existing content
+    while (this.svgContainer.firstChild) {
+      this.svgContainer.removeChild(this.svgContainer.firstChild);
     }
 
-    // Create title
-    const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    title.setAttribute('x', '20');
-    title.setAttribute('y', '30');
-    title.setAttribute('font-size', '18');
-    title.setAttribute('font-weight', 'bold');
-    title.setAttribute('fill', this.options.theme === 'dark' ? '#ffffff' : '#333333');
-    title.textContent = `DeepFlow: ${this.flow.id}`;
-    this.svgElement.appendChild(title);
-
-    // Create nodes for resources and steps
-    const resourceNodes = this.createResourceNodes();
-    const stepNodes = this.createStepNodes();
-
-    // Add nodes to SVG
-    resourceNodes.forEach(node => this.svgElement.appendChild(node));
-    stepNodes.forEach(node => this.svgElement.appendChild(node));
-
-    // Add connections between nodes
-    this.createConnections(resourceNodes, stepNodes);
+    this.renderFlow();
   }
 
-  private createResourceNodes(): SVGElement[] {
-    const nodes: SVGElement[] = [];
-    const resources = this.flow.resources || [];
-    
-    const resourceWidth = 200;
-    const resourceHeight = 60;
-    const resourceGap = 40;
-    const resourceY = 80;
+  /**
+   * Renders the flow diagram with resources, steps, and connections.
+   * @private
+   */
+  private renderFlow(): void {
+    // Create nodes for resources
+    const resourceNodes = this.flow.getResources().map((resource, index) => {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const x = 100;
+      const y = 100 + (index * 100);
 
-    resources.forEach((resource, index) => {
-      const x = 100 + index * (resourceWidth + resourceGap);
-      const y = resourceY;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x.toString());
+      rect.setAttribute('y', y.toString());
+      rect.setAttribute('width', '80');
+      rect.setAttribute('height', '40');
+      rect.setAttribute('rx', '5');
+      rect.setAttribute('fill', this.options.theme === 'dark' ? '#333' : '#fff');
+      rect.setAttribute('stroke', '#007bff');
 
-      const node = this.createResourceNode(resource, x, y);
-      nodes.push(node);
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', (x + 40).toString());
+      text.setAttribute('y', (y + 25).toString());
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('fill', this.options.theme === 'dark' ? '#fff' : '#000');
+      text.textContent = resource.id;
+
+      g.appendChild(rect);
+      g.appendChild(text);
+      return { element: g, x: x + 40, y: y + 20, id: resource.id };
     });
 
-    return nodes;
-  }
+    // Create nodes for steps
+    const stepNodes = this.flow.getSteps().map((step, index) => {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const x = 300;
+      const y = 100 + (index * 100);
 
-  private createStepNodes(): SVGElement[] {
-    const nodes: SVGElement[] = [];
-    const steps = this.flow.steps || [];
-    
-    const stepWidth = 200;
-    const stepHeight = 80;
-    const stepGap = 40;
-    const layerGap = 120;
-    const startY = 160;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x.toString());
+      rect.setAttribute('y', y.toString());
+      rect.setAttribute('width', '100');
+      rect.setAttribute('height', '50');
+      rect.setAttribute('rx', '5');
+      rect.setAttribute('fill', this.options.theme === 'dark' ? '#333' : '#fff');
+      rect.setAttribute('stroke', '#28a745');
 
-    // Organize steps into layers based on dependencies
-    const layers: Step[][] = [];
-    const stepMap: Record<string, Step> = {};
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', (x + 50).toString());
+      text.setAttribute('y', (y + 30).toString());
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('fill', this.options.theme === 'dark' ? '#fff' : '#000');
+      text.textContent = step.id;
 
-    steps.forEach(step => {
-      stepMap[step.id] = step;
+      g.appendChild(rect);
+      g.appendChild(text);
+      return { element: g, x: x + 50, y: y + 25, id: step.id };
     });
 
-    // Function to get all dependencies for a step
-    const getDependencies = (step: Step): string[] => {
-      if (!step.depends || step.depends === '') return [];
-      return step.depends.split(',').map(d => d.trim());
-    };
+    // Add all nodes to SVG
+    [...resourceNodes, ...stepNodes].forEach(node => {
+      this.svgContainer.appendChild(node.element);
+    });
 
-    // Function to calculate layer for a step
-    const calculateLayer = (step: Step, visited: Set<string> = new Set()): number => {
-      if (visited.has(step.id)) {
-        return 0;
+    // Create connections
+    this.flow.getSteps().forEach(step => {
+      // Connect step to its resource
+      const stepNode = stepNodes.find(n => n.id === step.id);
+      const resourceNode = resourceNodes.find(n => n.id === step.action.resource);
+
+      if (stepNode && resourceNode) {
+        const path = this.createConnection(
+          resourceNode.x + 40, resourceNode.y,
+          stepNode.x - 50, stepNode.y
+        );
+        this.svgContainer.appendChild(path);
       }
-      
-      visited.add(step.id);
-      const dependencies = getDependencies(step);
-      
-      if (dependencies.length === 0) {
-        return 0;
-      }
-      
-      let maxLayer = 0;
-      for (const depId of dependencies) {
-        const depStep = stepMap[depId];
-        if (depStep) {
-          const depLayer = calculateLayer(depStep, new Set(visited));
-          maxLayer = Math.max(maxLayer, depLayer + 1);
+
+      // Connect step to its dependencies
+      step.dependencies.forEach(depId => {
+        const depNode = stepNodes.find(n => n.id === depId);
+        if (depNode && stepNode) {
+          const path = this.createConnection(
+            depNode.x, depNode.y + 25,
+            stepNode.x, stepNode.y - 25
+          );
+          this.svgContainer.appendChild(path);
         }
-      }
-      
-      return maxLayer;
-    };
-
-    // Calculate layer for each step
-    steps.forEach(step => {
-      const layer = calculateLayer(step);
-      if (!layers[layer]) layers[layer] = [];
-      layers[layer].push(step);
-    });
-
-    // Place steps in layers
-    layers.forEach((layerSteps, layerIndex) => {
-      const y = startY + layerIndex * (stepHeight + layerGap);
-      const totalWidth = layerSteps.length * stepWidth + (layerSteps.length - 1) * stepGap;
-      const startX = (this.svgElement.clientWidth - totalWidth) / 2;
-      
-      layerSteps.forEach((step, stepIndex) => {
-        const x = startX + stepIndex * (stepWidth + stepGap);
-        const node = this.createStepNode(step, x, y);
-        nodes.push(node);
       });
     });
-
-    return nodes;
   }
 
-  private createResourceNode(resource: Resource, x: number, y: number): SVGElement {
-    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    group.setAttribute('transform', `translate(${x}, ${y})`);
+  /**
+   * Creates a curved connection path between two points.
+   * @param x1 - Start X coordinate
+   * @param y1 - Start Y coordinate
+   * @param x2 - End X coordinate
+   * @param y2 - End Y coordinate
+   * @returns SVG path element representing the connection
+   * @private
+   */
+  private createConnection(x1: number, y1: number, x2: number, y2: number): SVGPathElement {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const curve = Math.min(Math.abs(dx), Math.abs(dy)) * 0.5;
     
-    // Create resource node
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('width', '180');
-    rect.setAttribute('height', '60');
-    rect.setAttribute('rx', '8');
-    rect.setAttribute('ry', '8');
-    rect.setAttribute('fill', '#e3f2fd');
-    rect.setAttribute('stroke', '#90caf9');
-    rect.setAttribute('stroke-width', '2');
+    path.setAttribute('d', `
+      M ${x1} ${y1}
+      C ${x1 + curve} ${y1},
+        ${x2 - curve} ${y2},
+        ${x2} ${y2}
+    `);
     
-    // Add resource ID
-    const idText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    idText.setAttribute('x', '10');
-    idText.setAttribute('y', '25');
-    idText.setAttribute('font-size', '14');
-    idText.setAttribute('font-weight', 'bold');
-    idText.setAttribute('fill', '#1976d2');
-    idText.textContent = resource.id;
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', this.options.theme === 'dark' ? '#666' : '#999');
+    path.setAttribute('stroke-width', '2');
     
-    // Add resource type
-    const typeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    typeText.setAttribute('x', '10');
-    typeText.setAttribute('y', '45');
-    typeText.setAttribute('font-size', '12');
-    typeText.setAttribute('fill', '#616161');
-    typeText.textContent = `${resource.type} (${resource.provider})`;
-    
-    // Add elements to group
-    group.appendChild(rect);
-    group.appendChild(idText);
-    group.appendChild(typeText);
-    
-    return group;
+    return path;
   }
 
-  private createStepNode(step: Step, x: number, y: number): SVGElement {
-    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    group.setAttribute('transform', `translate(${x}, ${y})`);
-    
-    // Create step node
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('width', '200');
-    rect.setAttribute('height', '80');
-    rect.setAttribute('rx', '8');
-    rect.setAttribute('ry', '8');
-    rect.setAttribute('fill', '#e8f5e9');
-    rect.setAttribute('stroke', '#a5d6a7');
-    rect.setAttribute('stroke-width', '2');
-    
-    // Add step ID
-    const idText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    idText.setAttribute('x', '10');
-    idText.setAttribute('y', '25');
-    idText.setAttribute('font-size', '14');
-    idText.setAttribute('font-weight', 'bold');
-    idText.setAttribute('fill', '#2e7d32');
-    idText.textContent = step.id;
-    
-    // Add resource reference
-    const resourceText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    resourceText.setAttribute('x', '10');
-    resourceText.setAttribute('y', '45');
-    resourceText.setAttribute('font-size', '12');
+  /**
+   * Updates the flow being visualized and re-renders the diagram.
+   * @param flow - The new flow to visualize
+   */
+  public updateFlow(flow: DeepFlow): void {
+    this.flow = flow;
+    this.render();
+  }
+}

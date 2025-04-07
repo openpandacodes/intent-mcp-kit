@@ -1,194 +1,248 @@
-import { Intent, MCPResponse } from '../core/types';
+import { MCPWidget } from './base';
+import { MCPClient, Message } from '../core';
 
-interface ChatMessage {
-  id: string;
-  content: string;
-  timestamp: string;
-  sender: 'user' | 'assistant';
-  metadata?: Record<string, any>;
-}
-
-export interface ChatConfig {
-  clientId: string;
+/**
+ * Configuration options for the ChatWidget.
+ */
+interface ChatWidgetOptions {
+  /** Widget height (CSS value) */
+  height?: string;
+  /** Widget width (CSS value) */
+  width?: string;
+  /** Widget theme ('light' or 'dark') */
   theme?: 'light' | 'dark';
-  onMessage?: (message: ChatMessage) => void;
+  /** Placeholder text for the input field */
+  placeholder?: string;
+  /** Maximum number of messages to keep in history */
   maxMessages?: number;
-  rateLimit?: number; // messages per minute
+  /** Whether to automatically scroll to new messages */
+  autoScroll?: boolean;
 }
 
-export class ChatWidget {
-  private container: HTMLElement;
-  private config: ChatConfig;
-  private messages: ChatMessage[] = [];
-  private lastMessageTime: number = 0;
-  private messageQueue: string[] = [];
+/**
+ * Interactive chat widget for MCP that allows users to send messages and receive responses.
+ * Extends the base MCPWidget class with chat-specific functionality.
+ */
+export class ChatWidget extends MCPWidget {
+  /** Array of chat messages */
+  private messages: Message[] = [];
+  /** Container element for chat messages */
+  private chatContainer: HTMLElement = document.createElement('div');
+  /** Container element for input field and send button */
+  private inputContainer: HTMLElement = document.createElement('div');
+  /** Flag indicating whether a message is being processed */
   private isProcessing: boolean = false;
 
-  constructor(config: ChatConfig) {
-    this.validateConfig(config);
-    this.config = config;
-    this.initialize();
+  /**
+   * Creates a new ChatWidget instance.
+   * @param element - The target DOM element or its ID where the widget will be mounted
+   * @param client - The MCP client instance for API interactions
+   * @param options - Chat widget configuration options
+   */
+  constructor(element: HTMLElement | string, client: MCPClient, options: ChatWidgetOptions = {}) {
+    super(element, client, options);
+    this.element.classList.add('mcp-chat-widget');
+    this.setupChatContainer();
   }
 
-  private validateConfig(config: ChatConfig): void {
-    if (!config.clientId) {
-      throw new Error('clientId is required');
-    }
-    if (config.maxMessages && config.maxMessages < 1) {
-      throw new Error('maxMessages must be greater than 0');
-    }
-    if (config.rateLimit && (config.rateLimit < 1 || config.rateLimit > 100)) {
-      throw new Error('rateLimit must be between 1 and 100');
-    }
-  }
-
-  private initialize(): void {
-    const container = document.createElement('div');
-    container.className = `intent-chat-widget ${this.config.theme || 'light'}`;
-    container.innerHTML = `
-      <div class="chat-header">
-        <h3>Intent Chat</h3>
-      </div>
-      <div class="chat-messages" id="chat-messages"></div>
-      <div class="chat-input">
-        <input type="text" placeholder="Type your message..." id="chat-input">
-        <button id="send-button">Send</button>
-      </div>
+  /**
+   * Sets up the chat interface with message container and input field.
+   * @private
+   */
+  private setupChatContainer(): void {
+    // Create chat container
+    this.chatContainer = document.createElement('div');
+    this.chatContainer.className = 'chat-messages';
+    this.chatContainer.style.cssText = `
+      height: calc(100% - 60px);
+      overflow-y: auto;
+      padding: 20px;
     `;
-    this.container = container;
 
-    // Initialize event listeners with cleanup
-    this.setupEventListeners();
-  }
+    // Create input container
+    this.inputContainer = document.createElement('div');
+    this.inputContainer.className = 'chat-input';
+    this.inputContainer.style.cssText = `
+      height: 60px;
+      padding: 10px;
+      border-top: 1px solid #eee;
+      display: flex;
+      align-items: center;
+    `;
 
-  private setupEventListeners(): void {
-    const input = this.container.querySelector('#chat-input');
-    const button = this.container.querySelector('#send-button');
-    const messagesContainer = this.container.querySelector('.chat-messages');
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = (this.options as ChatWidgetOptions).placeholder || 'Type your message...';
+    input.style.cssText = `
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-right: 10px;
+    `;
 
-    if (input && button && messagesContainer) {
-      input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          this.sendMessage(input.value);
-        }
-      });
+    // Create send button
+    const button = document.createElement('button');
+    button.textContent = 'Send';
+    button.style.cssText = `
+      padding: 8px 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    `;
 
-      button.addEventListener('click', () => {
+    // Add event listeners
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !this.isProcessing) {
         this.sendMessage(input.value);
-      });
+        input.value = '';
+      }
+    });
 
-      // Cleanup listeners when destroyed
-      this.container.addEventListener('destroy', () => {
-        input.removeEventListener('keypress');
-        button.removeEventListener('click');
-      });
-    }
+    button.addEventListener('click', () => {
+      if (!this.isProcessing && input.value.trim()) {
+        this.sendMessage(input.value);
+        input.value = '';
+      }
+    });
+
+    // Assemble the widget
+    this.inputContainer.appendChild(input);
+    this.inputContainer.appendChild(button);
+    this.element.appendChild(this.chatContainer);
+    this.element.appendChild(this.inputContainer);
   }
 
-  private async sendMessage(message: string): Promise<void> {
-    if (!message || message.trim() === '') {
-      return;
-    }
-
-    // Rate limiting
-    const now = Date.now();
-    if (this.config.rateLimit && this.lastMessageTime) {
-      const minInterval = 60000 / this.config.rateLimit;
-      if (now - this.lastMessageTime < minInterval) {
-        return;
-      }
-    }
-
-    // Add to queue if processing
-    if (this.isProcessing) {
-      this.messageQueue.push(message);
-      return;
-    }
+  /**
+   * Sends a message and processes it through the MCP client.
+   * @param content - The message content to send
+   * @private
+   */
+  private async sendMessage(content: string): Promise<void> {
+    if (!content.trim() || this.isProcessing) return;
 
     try {
       this.isProcessing = true;
-      this.lastMessageTime = now;
+      this.showLoading();
 
-      // Create user message
-      const userMessage: ChatMessage = {
+      // Add user message
+      const userMessage: Message = {
         id: Date.now().toString(),
-        content: message,
+        content: content.trim(),
         timestamp: new Date().toISOString(),
         sender: 'user'
       };
+      this.addMessage(userMessage);
 
-      // Add to messages
-      this.messages.push(userMessage);
-      this.renderMessages();
-
-      // Send to server
-      const response = await this.processMessage(message);
-      if (response.success && response.data) {
-        // Create assistant message
-        const assistantMessage: ChatMessage = {
-          id: Date.now().toString(),
-          content: response.data.response,
+      // Process the message using the client
+      const intent = await this.client.processIntent(content);
+      const flows = await this.client.generateWorkflows(intent);
+      
+      if (flows.length > 0) {
+        const result = await this.client.executeWorkflow(flows[0]);
+        
+        // Add assistant message
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: result.success 
+            ? `I've processed your request: ${content}\nResult: ${JSON.stringify(result.data, null, 2)}`
+            : 'I apologize, but I was unable to process your request.',
           timestamp: new Date().toISOString(),
           sender: 'assistant',
-          metadata: response.data.metadata
+          metadata: { result }
         };
-
-        this.messages.push(assistantMessage);
-        this.renderMessages();
-      }
-
-      // Process queue
-      if (this.messageQueue.length > 0) {
-        this.sendMessage(this.messageQueue.shift()!);
+        this.addMessage(assistantMessage);
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.element.appendChild(this.createErrorElement(errorMessage));
     } finally {
       this.isProcessing = false;
+      this.hideLoading();
     }
   }
 
-  private async processMessage(message: string): Promise<MCPResponse> {
-    // Implementation using MCPClient
-    return {
-      success: true,
-      data: {
-        response: 'This is a mock response'
-      }
-    };
+  /**
+   * Adds a message to the chat history.
+   * @param message - The message to add
+   * @private
+   */
+  private addMessage(message: Message): void {
+    this.messages.push(message);
+
+    // Apply message limit if specified
+    const maxMessages = (this.options as ChatWidgetOptions).maxMessages;
+    if (maxMessages && this.messages.length > maxMessages) {
+      this.messages = this.messages.slice(-maxMessages);
+    }
+
+    this.renderMessages();
   }
 
+  /**
+   * Renders all messages in the chat container.
+   * @private
+   */
   private renderMessages(): void {
-    const messagesContainer = this.container.querySelector('.chat-messages');
-    if (!messagesContainer) return;
-
-    // Apply max messages limit
-    if (this.config.maxMessages && this.messages.length > this.config.maxMessages) {
-      this.messages = this.messages.slice(-this.config.maxMessages);
-    }
-
-    messagesContainer.innerHTML = this.messages
-      .map((msg) => `
-        <div class="message ${msg.sender}">
-          <div class="message-content">${msg.content}</div>
-          <div class="message-timestamp">${new Date(msg.timestamp).toLocaleTimeString()}</div>
+    this.chatContainer.innerHTML = this.messages
+      .map(msg => `
+        <div class="chat-message ${msg.sender}" style="
+          margin: 10px 0;
+          padding: 10px;
+          border-radius: 4px;
+          max-width: 80%;
+          ${msg.sender === 'user' ? 'margin-left: auto; background: #007bff; color: white;' : 'background: #f1f1f1;'}
+        ">
+          <div class="message-content">${this.escapeHtml(msg.content)}</div>
+          <div class="message-timestamp" style="font-size: 0.8em; opacity: 0.7;">
+            ${new Date(msg.timestamp).toLocaleTimeString()}
+          </div>
         </div>
       `)
       .join('');
 
-    // Scroll to bottom
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }
-
-  public render(target: HTMLElement): void {
-    if (!target) {
-      throw new Error('Target element is required');
+    // Auto scroll to bottom if enabled
+    if ((this.options as ChatWidgetOptions).autoScroll !== false) {
+      this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
     }
-    target.appendChild(this.container);
   }
 
-  public destroy(): void {
-    this.container.dispatchEvent(new Event('destroy'));
-    this.container.remove();
+  /**
+   * Escapes HTML characters in a string to prevent XSS.
+   * @param html - The string to escape
+   * @returns The escaped string
+   * @private
+   */
+  private escapeHtml(html: string): string {
+    const div = document.createElement('div');
+    div.textContent = html;
+    return div.innerHTML;
+  }
+
+  /**
+   * Renders the chat widget.
+   * Implements the abstract render method from MCPWidget.
+   */
+  public render(): void {
+    this.renderMessages();
+  }
+
+  /**
+   * Clears all messages from the chat history.
+   */
+  public clearMessages(): void {
+    this.messages = [];
+    this.renderMessages();
+  }
+
+  /**
+   * Gets a copy of the current message history.
+   * @returns Array of messages
+   */
+  public getMessages(): Message[] {
+    return [...this.messages];
   }
 }
