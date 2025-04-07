@@ -23,3 +23,18 @@ export interface Intent {
     parameters?: Record<string, any>;
     timeout?: number;
   }
+
+  export interface WidgetOptions {
+    height?: string;
+    width?: string;
+    theme?: 'light' | 'dark';
+    zoom?: {
+      min: number;
+      max: number;
+      step: number;
+    };
+    pan?: {
+      enabled: boolean;
+      speed: number;
+    };
+  }
