@@ -10,7 +10,7 @@
 </div>
 
 <p align="center">
-  <strong>A powerful SDK for Machine Comprehension and Processing (MCP) by Aintent.ai, an Axes Labs company.</strong>
+  <strong>A powerful SDK for Model Context Protocol (MCP) by Aintent.ai, an Axes Labs company.</strong>
 </p>
 
 <p align="center">
